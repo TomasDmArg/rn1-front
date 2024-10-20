@@ -5,7 +5,7 @@ import { CheckCircle, Circle } from 'lucide-react';
 
 interface Todo {
   id: number;
-  text: string;
+  title: string;
   completed: boolean;
 }
 
@@ -31,7 +31,7 @@ const TodoList: React.FC<TodoListProps> = ({ todos, toggleTodo }) => {
               )}
             </Button>
             <span className={`flex-grow ${todo.completed ? 'line-through text-gray-500' : ''}`}>
-              {todo.text}
+              {todo.title}
             </span>
           </CardContent>
         </Card>

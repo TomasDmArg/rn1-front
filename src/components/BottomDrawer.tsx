@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../components/ui/button';
 import { Input } from './ui/input';
 import { Add01Icon } from 'hugeicons-react';
+import { useTodos } from '@/context/TodosContext';
 
 interface BottomDrawerProps {
   isOpen: boolean;
@@ -11,12 +12,14 @@ interface BottomDrawerProps {
 }
 
 const BottomDrawer: React.FC<BottomDrawerProps> = ({ isOpen, onClose, onAddTask }) => {
+  const { createTodo } = useTodos();
   const [taskText, setTaskText] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (taskText.trim()) {
       onAddTask(taskText.trim());
+      createTodo(taskText.trim())
       setTaskText('');
       onClose();    
     }

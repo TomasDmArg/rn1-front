@@ -1,72 +1,168 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+/**
+ * AuthProvider Component
+ * 
+ * This component provides authentication context to its children components.
+ * It manages user authentication state, including login, register, and logout functionalities.
+ * This version uses Capacitor Preferences for secure, cross-platform storage of the auth token.
+ * 
+ * @component
+ */
 
-interface User {
-  id: string;
-  name: string;
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import axios from 'axios';
+import { Preferences } from '@capacitor/preferences';
+import { BASE_URL } from '../constants/config';
+
+export interface User {
+  id: number;
   email: string;
-  profilePicture: string;
+  name?: string;
+  profilePicture?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (email: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
+  isLoaded: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// This is just the key under which we store the auth token
+const AUTH_TOKEN_KEY = 'authToken';
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
-    // Aquí puedes agregar lógica para cargar el token desde localStorage al iniciar la app
-    const storedToken = localStorage.getItem('authToken');
-    if (storedToken) {
-      setToken(storedToken);
-      // Aquí deberías validar el token y cargar la información del usuario
-    }
+    const loadToken = async () => {
+      const { value: storedToken } = await Preferences.get({ key: AUTH_TOKEN_KEY });
+      if (storedToken) {
+        setToken(storedToken);
+        await getCurrentUser(storedToken);
+      } else {
+        setIsLoaded(true);
+      }
+    };
+    loadToken();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    // Aquí iría la lógica real de autenticación con tu backend
-    // Este es solo un ejemplo
-    const response = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      setUser(data.user);
-      setToken(data.token);
-      localStorage.setItem('authToken', data.token);
-    } else {
-      throw new Error('Login failed');
+  /**
+   * Fetches the current user's data using the provided token
+   * 
+   * @param {string} authToken - The authentication token
+   */
+  const getCurrentUser = async (authToken: string) => {
+    try {
+      const response = await axios.get(`${BASE_URL}/users/me`, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      if (response.data) {
+        setUser(response.data);
+      } else {
+        throw new Error('Invalid user data structure');
+      }
+    } catch (error) {
+      console.error("Failed to fetch user data:", error);
+      await logout();
+    } finally {
+      setIsLoaded(true);
     }
   };
 
-  const logout = () => {
+  /**
+   * Authenticates a user with email and password
+   * 
+   * @param {string} email - User's email
+   * @param {string} password - User's password
+   * @returns {Promise<boolean>} True if login successful, false otherwise
+   */
+  const login = async (email: string, password: string): Promise<boolean> => {
+    try {
+      const response = await axios.post(`${BASE_URL}/login`, { email, password });
+      
+      const { access_token, token_type } = response.data;
+
+      if(!access_token){
+        return false;
+      }
+
+      // Set the token in state
+      setToken(access_token);
+      // Store the actual token using Capacitor Preferences
+      await Preferences.set({ key: AUTH_TOKEN_KEY, value: access_token });
+      
+      await getCurrentUser(access_token);
+      
+      return true;
+    } catch (error) {
+      console.error("Login error:", error);
+      return false;
+    }
+  };
+
+  /**
+   * Registers a new user with email and password
+   * 
+   * @param {string} email - User's email
+   * @param {string} password - User's password
+   * @returns {Promise<boolean>} True if registration successful, false otherwise
+   */
+  const register = async (email: string, password: string) => {
+    try {
+      const response = await axios.post(`${BASE_URL}/register`, { email, password });
+      if (response.data && response.data.info) {
+        setUser(response.data.info);
+        return true;
+      } else {
+        throw new Error('Invalid registration response');
+      }
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 400) {
+        console.log("Email already registered");
+      } else {
+        console.error("Registration error:", error);
+      }
+      return false;
+    }
+  };
+
+  /**
+   * Logs out the current user and removes the stored token
+   */
+  const logout = async () => {
     setUser(null);
     setToken(null);
-    localStorage.removeItem('authToken');
+    // Remove the token from Capacitor Preferences
+    await Preferences.remove({ key: AUTH_TOKEN_KEY });
   };
 
   const value = {
     user,
     token,
     login,
+    register,
     logout,
     isAuthenticated: !!user,
+    isLoaded,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-export const useAuth = () => {
+/**
+ * Custom hook to use the auth context
+ * 
+ * @returns {AuthContextType} The auth context value
+ * @throws {Error} If used outside of AuthProvider
+ */
+export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');

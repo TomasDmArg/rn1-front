@@ -1,42 +1,46 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { IonContent, IonPage } from '@ionic/react';
+import { IonContent, IonPage, useIonRouter } from '@ionic/react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ViewIcon, ViewOffSlashIcon } from "hugeicons-react";
+import { useAuth } from '../context/AuthContext';
+import { validateEmail, validatePassword, PasswordRequirements } from '../utils/auth';
 
+/**
+ * Register component for user registration
+ */
 const Register: React.FC = () => {
-  const [name, setName] = useState('');
+  const router = useIonRouter();
+  const { register, login } = useAuth();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string; confirmPassword?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
 
-  const passwordRequirements = useMemo(() => ({
-    length: password.length >= 8,
-    uppercase: /[A-Z]/.test(password),
-    lowercase: /[a-z]/.test(password),
-    number: /[0-9]/.test(password),
-    special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
-  }), [password]);
+  /**
+   * Memoized password requirements check
+   */
+  const passwordRequirements = useMemo(() => validatePassword(password), [password]);
 
+  /**
+   * Check if all password requirements are met
+   */
   const allRequirementsMet = useMemo(() => 
     Object.values(passwordRequirements).every(req => req),
   [passwordRequirements]);
 
+  /**
+   * Validate form fields
+   */
   const validateForm = useCallback(() => {
-    const newErrors: { name?: string; email?: string; password?: string; confirmPassword?: string } = {};
+    const newErrors: { email?: string; password?: string; confirmPassword?: string } = {};
 
-    if (!name.trim()) {
-      newErrors.name = "El nombre es requerido";
-    }
-
-    if (!email) {
-      newErrors.email = "El correo electrónico es requerido";
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
+    if (!validateEmail(email)) {
       newErrors.email = "El correo electrónico no es válido";
     }
 
@@ -52,18 +56,35 @@ const Register: React.FC = () => {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [name, email, password, confirmPassword, allRequirementsMet]);
+  }, [email, password, confirmPassword, allRequirementsMet]);
 
-  const handleRegister = useCallback((e: React.FormEvent) => {
+  /**
+   * Handle register form submission
+   */
+  const handleRegister = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (validateForm()) {
-      console.log('Intento de registro con:', { name, email, password });
-      // Aquí iría la lógica real de registro
-    } else {
-      console.log('El formulario contiene errores');
+      try {
+        const registerSuccess = await register(email, password);
+        if (registerSuccess) {
+          const loginSuccess = await login(email, password);
+          if (loginSuccess) {
+            router.push("/home");
+          } else {
+            setErrors({ email: "Error al iniciar sesión automáticamente" });
+          }
+        } else {
+          setErrors({ email: "Error al registrar. El correo electrónico podría estar en uso." });
+        }
+      } catch (error) {
+        setErrors({ email: "Ocurrió un error durante el registro" });
+      }
     }
-  }, [name, email, password, validateForm]);
+  }, [email, password, validateForm, register, login, router]);
 
+  /**
+   * Render a single password requirement item
+   */
   const RequirementItem = ({ text, met }: { text: string; met: boolean }) => (
     <motion.li
       initial={{ opacity: 0, y: -10 }}
@@ -79,27 +100,12 @@ const Register: React.FC = () => {
   return (
     <IonPage>
       <IonContent fullscreen>
-        <main className='w-full h-full flex flex-col items-center justify-center w-full max-w-[500px] px-12 mx-auto gap-6'>
-          <h1 className='flex flex-row items-center gap-3 font-bold text-3xl'>
+        <main className='w-full h-full flex flex-col items-center justify-center max-w-[500px] px-12 mx-auto gap-6'>
+          <h1 className='flex flex-row items-center gap-3 font-bold text-3xl mb-4'>
             <img src="/waving-hand-sign_1f44b.png" className="w-[30px] h-[30px]" alt="Saludo" />
             Regístrate
           </h1>
           <form onSubmit={handleRegister} className='flex flex-col gap-3 w-full'>
-            <div>
-              <Input
-                type="text"
-                placeholder="Nombre"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                className={errors.name ? "border-red-500" : ""}
-              />
-              {errors.name && (
-                <Alert variant="destructive" className="mt-2">
-                  <AlertDescription>{errors.name}</AlertDescription>
-                </Alert>
-              )}
-            </div>
             <div>
               <Input
                 type="email"
@@ -180,8 +186,8 @@ const Register: React.FC = () => {
                 </motion.ul>
               )}
             </AnimatePresence>
-            <Button type="submit" className="w-full">Registrarse</Button>
-            <Button type="button" className="w-full" variant="outline" onClick={() => {/* Navegar a la página de inicio de sesión */}}>
+            <Button type="submit" className="w-full mt-4">Registrarse</Button>
+            <Button type="button" className="w-full" variant="outline" onClick={() => router.push('/login')}>
               ¿Ya tienes una cuenta? Inicia sesión
             </Button>
           </form>

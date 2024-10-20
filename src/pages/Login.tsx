@@ -1,36 +1,45 @@
-import { IonContent, IonPage } from '@ionic/react';
+import { IonContent, IonPage, useIonRouter } from '@ionic/react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ViewIcon, ViewOffSlashIcon } from "hugeicons-react";
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { useAuth } from '../context/AuthContext';
+import { validateEmail, validatePassword } from '../utils/auth';
 
+/** 
+ * Login component for user authentication
+ */
 const Login: React.FC = () => {
+  const router = useIonRouter();
+  const { login, isAuthenticated } = useAuth();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
+  
+  /** 
+   * Memoized password requirements check
+   */
+  const passwordRequirements = useMemo(() => validatePassword(password), [password]);
 
-  const passwordRequirements = useMemo(() => ({
-    length: password.length >= 8,
-    uppercase: /[A-Z]/.test(password),
-    lowercase: /[a-z]/.test(password),
-    number: /[0-9]/.test(password),
-    special: /[!@#$%^&*(),.?":{}|<>]/.test(password)
-  }), [password]);
-
+  /** 
+   * Check if all password requirements are met
+   */
   const allRequirementsMet = useMemo(() => 
     Object.values(passwordRequirements).every(req => req),
   [passwordRequirements]);
 
+  /** 
+   * Validate form fields
+   */
   const validateForm = useCallback(() => {
     const newErrors: { email?: string; password?: string } = {};
 
-    if (!email) {
-      newErrors.email = "El correo electrónico es requerido";
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
+    if (!validateEmail(email)) {
       newErrors.email = "El correo electrónico no es válido";
     }
 
@@ -44,17 +53,45 @@ const Login: React.FC = () => {
     return Object.keys(newErrors).length === 0;
   }, [email, password, allRequirementsMet]);
 
-  const handleLogin = useCallback((e: React.FormEvent) => {
+  /** 
+   * Handle login form submission
+   */
+  const handleLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitted(true);
-    if (validateForm()) {
-      console.log('Intento de inicio de sesión con:', email, password);
-      // Aquí iría la lógica real de inicio de sesión
-    } else {
-      console.log('El formulario contiene errores');
+    
+    if (!validateForm()) return;
+      
+    try {
+      const passed = await login(email, password);
+      if (!passed) {
+        setErrors({ password: "Credenciales inválidas" });
+      } else {
+        router.push("/home");
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      setErrors({ general: "Ocurrió un error durante el inicio de sesión. Por favor, inténtelo de nuevo." });
     }
-  }, [email, password, validateForm]);
+  }, [email, password, validateForm, login, router]);
 
+  /** Handle Register redirect */
+  const handleRegister = () => {
+    router.push("/register", "forward", "push");
+  }
+
+  /** 
+   * Redirect to home if already authenticated
+   */
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/home", "forward", "push");
+    }
+  }, [isAuthenticated, router]);
+
+  /** 
+   * Render a single password requirement item
+   */
   const RequirementItem = ({ text, met }: { text: string; met: boolean }) => (
     <motion.li
       initial={{ opacity: 0, y: -10 }}
@@ -70,12 +107,17 @@ const Login: React.FC = () => {
   return (
     <IonPage>
       <IonContent fullscreen>
-        <main className='w-full h-full flex flex-col items-center justify-center w-full max-w-[500px] px-12 mx-auto gap-6'>
-          <h1 className='flex flex-row items-center gap-3 font-bold text-3xl'>
+        <main className='w-full h-full flex flex-col items-center justify-center max-w-[500px] px-12 mx-auto gap-6'>
+          <h1 className='flex flex-row items-center gap-3 font-bold text-3xl mb-4'>
             <img src="/waving-hand-sign_1f44b.png" className="w-[30px] h-[30px]" alt="Saludo" />
             Bienvenido!
           </h1>
           <form onSubmit={handleLogin} className='flex flex-col gap-3 w-full'>
+            {errors.general && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertDescription>{errors.general}</AlertDescription>
+              </Alert>
+            )}
             <div>
               <Input
                 type="email"
@@ -132,8 +174,12 @@ const Login: React.FC = () => {
                 </motion.ul>
               )}
             </AnimatePresence>
-            <Button type="submit" className="w-full">Iniciar sesión</Button>
-            <Button type="button" className="w-full" variant="outline">Registrarse</Button>
+            <Button type="submit" className="rounded-xl mt-4">
+              Iniciar sesión
+            </Button>
+            <Button type="button" className="rounded-xl" variant="outline" onClick={handleRegister}>
+              Registrarse
+            </Button>
           </form>
         </main>
       </IonContent>

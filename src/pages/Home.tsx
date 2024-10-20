@@ -5,25 +5,25 @@ import Header from '../components/Header';
 import TodoList from '../components/TodoList';
 import AddTaskButton from '../components/AddTaskButton';
 import BottomDrawer from '../components/BottomDrawer';
+import { useTodos } from '@/context/TodosContext';
 
 const Home: React.FC = () => {
-  const { user } = useAuth();
-  const [todos, setTodos] = useState([
-    { id: 1, text: 'Complete project proposal', completed: false },
-    { id: 2, text: 'Buy groceries', completed: true },
-    { id: 3, text: 'Go for a run', completed: false },
-  ]);
+  const { todos, createTodo } = useTodos();
+
+  const [localTodos, setLocalTodos] = useState(todos);
+
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   const toggleTodo = (id: number) => {
-    setTodos(todos.map(todo => 
+    setLocalTodos(todos.map(todo => 
       todo.id === id ? { ...todo, completed: !todo.completed } : todo
     ));
   };
 
   const addTodo = (text: string) => {
-    const newTodo = { id: Date.now(), text, completed: false };
-    setTodos([...todos, newTodo]);
+    const newTodo = { id: Date.now(), title: text, completed: false };
+    createTodo(text);
+    setLocalTodos([...localTodos, newTodo]);
     setIsDrawerOpen(false);
   };
 
@@ -31,7 +31,7 @@ const Home: React.FC = () => {
     <IonPage>
       <IonContent fullscreen>
         <main className="w-full h-full max-w-[500px] mx-auto flex flex-col items-center justify-between p-6 bg-gray-100">
-          <Header user={user} />
+          <Header />
           <TodoList todos={todos} toggleTodo={toggleTodo} />
           <AddTaskButton onClick={() => setIsDrawerOpen(true)} />
         </main>
