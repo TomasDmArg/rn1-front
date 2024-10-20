@@ -37,28 +37,31 @@ import Home from './pages/Home';
 import Register from './pages/Register';
 import Login from './pages/Login';
 import { AuthProvider } from './context/AuthContext';
+import { TodoProvider } from './context/TodosContext';
 
 setupIonicReact();
 
 const App: React.FC = () => (
   <IonApp>
     <AuthProvider>
-      <IonReactRouter>
-        <IonRouterOutlet>
-          <Route exact path="/home">
-            <Home />
-          </Route>
-          <Route exact path="/">
-            <Login />
-          </Route>
-          <Route exact path="/login">
-            <Redirect to={"/"} />
-          </Route>
-          <Route exact path="/register">
-            <Register />
-          </Route>
-        </IonRouterOutlet>
-      </IonReactRouter>
+      <TodoProvider>
+        <IonReactRouter>
+          <IonRouterOutlet>
+            <Route exact path="/home">
+              <Home />
+            </Route>
+            <Route exact path="/">
+              <Login />
+            </Route>
+            <Route exact path="/login">
+              <Redirect to={"/"} />
+            </Route>
+            <Route exact path="/register">
+              <Register />
+            </Route>
+          </IonRouterOutlet>
+        </IonReactRouter>
+      </TodoProvider>
     </AuthProvider>
   </IonApp>
 );
